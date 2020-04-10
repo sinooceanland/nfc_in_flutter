@@ -438,6 +438,8 @@
 }
     
 - (void)startReading:(BOOL)once alertMessage:(NSString* _Nonnull)alertMessage {
+    self->invalidateAfterFirstRead = once;
+    self->alertMessage = alertMessage;
     if (session == nil) {
         session = [[NFCNDEFReaderSession alloc]initWithDelegate:self queue:dispatchQueue invalidateAfterFirstRead: once];
         session.alertMessage = alertMessage;
@@ -518,9 +520,144 @@
 
 @end
 
+@interface NFCWritableWrapperImpl ()
+{
+    BOOL _tagReadFinish;
+}
+
+@end
+
 @implementation NFCWritableWrapperImpl
 
 @synthesize lastTag;
+
+- (void)startReading:(BOOL)once alertMessage:(NSString* _Nonnull)alertMessage {
+    self->invalidateAfterFirstRead = once;
+    self->alertMessage = alertMessage;
+    if (self.tagSession == nil) {
+        self.tagSession = [[NFCTagReaderSession alloc] initWithPollingOption:(NFCPollingISO14443 | NFCPollingISO15693 | NFCPollingISO15693) delegate:self queue:dispatchQueue];
+        self.tagSession.alertMessage = alertMessage;
+    }
+    [self.tagSession beginSession];
+}
+
+- (void)startReadingNDEF {
+    if (session == nil) {
+        session = [[NFCNDEFReaderSession alloc]initWithDelegate:self queue:dispatchQueue invalidateAfterFirstRead: self->invalidateAfterFirstRead];
+        session.alertMessage = self->alertMessage;
+    }
+    [self->session beginSession];
+}
+
+- (void)tagReaderSessionDidBecomeActive:(NFCTagReaderSession *)session {}
+
+- (void)tagReaderSession:(NFCTagReaderSession *)session didInvalidateWithError:(NSError *)error {
+    // When a session has been invalidated it needs to be created again to work.
+    // Since this function is called when it invalidates, the session can safely be removed.
+    // A new session doesn't have to be created immediately as that will happen the next time
+    // startReading() is called.
+    self.tagSession = nil;
+    
+    // If the event stream is closed we can't send the error
+    if (events == nil) {
+        return;
+    }
+    switch ([error code]) {
+        case NFCReaderSessionInvalidationErrorFirstNDEFTagRead:
+            // When this error is returned it doesn't need to be sent to the client
+            // as it cancels the stream after 1 read anyways
+            events(FlutterEndOfEventStream);
+            return;
+        case NFCReaderErrorUnsupportedFeature:
+            events([FlutterError
+                    errorWithCode:@"NDEFUnsupportedFeatureError"
+                    message:error.localizedDescription
+                    details:nil]);
+            break;
+        case NFCReaderSessionInvalidationErrorUserCanceled:
+            if (_tagReadFinish) {
+                _tagReadFinish = NO;
+                return;
+            }
+            events([FlutterError
+                    errorWithCode:@"UserCanceledSessionError"
+                    message:error.localizedDescription
+                    details:nil]);
+            break;
+        case NFCReaderSessionInvalidationErrorSessionTimeout:
+            events([FlutterError
+                    errorWithCode:@"SessionTimeoutError"
+                    message:error.localizedDescription
+                    details:nil]);
+            break;
+        case NFCReaderSessionInvalidationErrorSessionTerminatedUnexpectedly:
+            events([FlutterError
+                    errorWithCode:@"SessionTerminatedUnexpectedlyError"
+                    message:error.localizedDescription
+                    details:nil]);
+            break;
+        case NFCReaderSessionInvalidationErrorSystemIsBusy:
+            events([FlutterError
+                    errorWithCode:@"SystemIsBusyError"
+                    message:error.localizedDescription
+                    details:nil]);
+            break;
+        default:
+            events([FlutterError
+                    errorWithCode:@"SessionError"
+                    message:error.localizedDescription
+                    details:nil]);
+    }
+    // Make sure to close the stream, otherwise bad things will happen.
+    // (onCancelWithArguments will never be called so the stream will
+    //  not be reset and will be stuck in a 'User Canceled' error loop)
+    events(FlutterEndOfEventStream);
+    return;
+}
+
+- (void)tagReaderSession:(NFCTagReaderSession *)session didDetectTags:(NSArray<__kindof id<NFCTag>> *)tags {
+    NSLog(@"%@",tags);
+    self.cuurentTag = [tags firstObject];
+    id<NFCMiFareTag> mifareTag = [self.cuurentTag asNFCMiFareTag];
+    NSData *data = mifareTag.identifier;
+    NSString *string = [self convertDataBytesToHex:data];
+    NSLog(@"result---%@",string);
+    self->tagIdentifier = string;
+    NSDictionary* result = @{
+        @"id": @"",
+        @"message_type": @"tag",
+        @"tagId": self->tagIdentifier ?: @"",
+    };
+    if (self->events != nil) {
+        self->events(result);
+    }
+    
+    // stop reading tag，begin reading NDEF
+    _tagReadFinish = YES;
+    [self.tagSession invalidateSession];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self startReadingNDEF];
+    });
+}
+
+- (NSString *)convertDataBytesToHex:(NSData *)dataBytes {
+    if (!dataBytes || [dataBytes length] == 0) {
+        return @"";
+    }
+    NSMutableString *hexStr = [[NSMutableString alloc] initWithCapacity:[dataBytes length]];
+    [dataBytes enumerateByteRangesUsingBlock:^(const void *bytes, NSRange byteRange, BOOL *stop) {
+        unsigned char *dataBytes = (unsigned char *)bytes;
+        for (NSInteger i = 0; i < byteRange.length; i ++) {
+            NSString *singleHexStr = [NSString stringWithFormat:@"%x", (dataBytes[i]) & 0xff];
+            if ([singleHexStr length] == 2) {
+                [hexStr appendString:singleHexStr];
+            } else {
+                [hexStr appendFormat:@"0%@", singleHexStr];
+            }
+        }
+    }];
+    return hexStr;
+}
 
 - (void)readerSession:(NFCNDEFReaderSession *)session
         didDetectTags:(NSArray<__kindof id<NFCNDEFTag>> *)tags API_AVAILABLE(ios(13.0)) {

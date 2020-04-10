@@ -34,14 +34,21 @@ API_AVAILABLE(ios(11))
 @interface NFCWrapperImpl : NFCWrapperBase <NFCWrapper, NFCNDEFReaderSessionDelegate> {
     FlutterMethodChannel* methodChannel;
     dispatch_queue_t dispatchQueue;
+    BOOL invalidateAfterFirstRead;
+    NSString* alertMessage;
+    NSString* tagIdentifier;
 }
 -(id _Nullable )init:(FlutterMethodChannel*_Nonnull)methodChannel dispatchQueue:(dispatch_queue_t _Nonnull )dispatchQueue;
 @end
 
 API_AVAILABLE(ios(13))
-@interface NFCWritableWrapperImpl : NFCWrapperImpl
+@interface NFCWritableWrapperImpl : NFCWrapperImpl <NFCTagReaderSessionDelegate>
 
 @property (atomic, retain) __kindof id<NFCNDEFTag> _Nullable lastTag;
+
+@property (strong, nonatomic)NFCTagReaderSession *tagSession;
+
+@property(strong,nonatomic)id<NFCTag> cuurentTag;
 
 @end
 

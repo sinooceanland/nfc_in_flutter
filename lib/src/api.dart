@@ -8,7 +8,7 @@ import './exceptions.dart';
 class NFC {
   static MethodChannel _channel = MethodChannel("nfc_in_flutter");
   static const EventChannel _eventChannel =
-      const EventChannel("nfc_in_flutter/tags");
+  const EventChannel("nfc_in_flutter/tags");
 
   static Stream<dynamic> _tagStream;
 
@@ -16,12 +16,19 @@ class NFC {
     _tagStream = _eventChannel.receiveBroadcastStream().where((tag) {
       // In the future when more tag types are supported, this must be changed.
       assert(tag is Map);
-      return tag["message_type"] == "ndef";
+      var message_type = tag["message_type"];
+      return message_type == "ndef" || message_type == "tag";
     }).map<NFCMessage>((tag) {
       assert(tag is Map);
 
+      var message_type = tag["message_type"];
+      dynamic other = null;
+      if (message_type == "tag") {
+        other = tag["tagId"];
+      }
+
       List<NDEFRecord> records = [];
-      for (var record in tag["records"]) {
+      for (var record in (tag["records"] ?? [])) {
         NFCTypeNameFormat tnf;
         switch (record["tnf"]) {
           case "empty":
@@ -56,7 +63,7 @@ class NFC {
         ));
       }
 
-      return NDEFMessage._internal(tag["id"], tag["type"], records);
+      return NDEFMessage._internal(tag["id"], tag["type"], records, other);
     });
   }
 
@@ -76,22 +83,22 @@ class NFC {
   static Stream<NDEFMessage> readNDEF(
       {
 
-      /// once will stop reading after the first tag has been read.
-      bool once = false,
+        /// once will stop reading after the first tag has been read.
+        bool once = false,
 
-      /// throwOnUserCancel decides if a [NFCUserCanceledSessionException] error
-      /// should be thrown on iOS when the user clicks Cancel/Done.
-      bool throwOnUserCancel = true,
+        /// throwOnUserCancel decides if a [NFCUserCanceledSessionException] error
+        /// should be thrown on iOS when the user clicks Cancel/Done.
+        bool throwOnUserCancel = true,
 
-      /// alertMessage sets the message on the iOS NFC modal.
-      String alertMessage = "",
+        /// alertMessage sets the message on the iOS NFC modal.
+        String alertMessage = "",
 
-      /// readerMode specifies which mode the reader should use. By default it
-      /// will use the normal mode, which scans for tags normally without
-      /// support for peer-to-peer operations, such as emulated host cards.
-      ///
-      /// This is ignored on iOS as it only has one reading mode.
-      NFCReaderMode readerMode = const NFCNormalReaderMode()}) {
+        /// readerMode specifies which mode the reader should use. By default it
+        /// will use the normal mode, which scans for tags normally without
+        /// support for peer-to-peer operations, such as emulated host cards.
+        ///
+        /// This is ignored on iOS as it only has one reading mode.
+        NFCReaderMode readerMode = const NFCNormalReaderMode()}) {
     if (_tagStream == null) {
       _createTagStream();
     }
@@ -168,17 +175,17 @@ class NFC {
   static Stream<NDEFTag> writeNDEF(NDEFMessage newMessage,
       {
 
-      /// once will stop reading after the first tag has been read.
-      bool once = false,
+        /// once will stop reading after the first tag has been read.
+        bool once = false,
 
-      /// message specify the message shown to the user when the NFC modal is
-      /// open
-      ///
-      /// This is ignored on Android as it does not have NFC modal
-      String message = "",
+        /// message specify the message shown to the user when the NFC modal is
+        /// open
+        ///
+        /// This is ignored on Android as it does not have NFC modal
+        String message = "",
 
-      /// readerMode specifies which mode the reader should use.
-      NFCReaderMode readerMode = const NFCNormalReaderMode()}) {
+        /// readerMode specifies which mode the reader should use.
+        NFCReaderMode readerMode = const NFCNormalReaderMode()}) {
     if (_tagStream == null) {
       _createTagStream();
     }
@@ -292,12 +299,13 @@ class NDEFMessage implements NFCMessage {
   final String id;
   String type;
   final List<NDEFRecord> records;
+  dynamic other;
 
   NDEFMessage.withRecords(this.records, {this.id});
 
   NDEFMessage(this.type, this.records) : id = null;
 
-  NDEFMessage._internal(this.id, this.type, this.records);
+  NDEFMessage._internal(this.id, this.type, this.records, this.other);
 
   // payload returns the payload of the first non-empty record. If all records
   // are empty it will return null.
