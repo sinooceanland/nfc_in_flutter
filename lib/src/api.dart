@@ -17,15 +17,12 @@ class NFC {
       // In the future when more tag types are supported, this must be changed.
       assert(tag is Map);
       var message_type = tag["message_type"];
-      return message_type == "ndef" || message_type == "tag";
+      return message_type == "ndef" || message_type == "readTag";
     }).map<NFCMessage>((tag) {
       assert(tag is Map);
 
       var message_type = tag["message_type"];
-      dynamic other = null;
-      if (message_type == "tag") {
-        other = tag["tagId"];
-      }
+      dynamic other = message_type;
 
       List<NDEFRecord> records = [];
       for (var record in (tag["records"] ?? [])) {
@@ -72,9 +69,11 @@ class NFC {
     String alertMessage,
     NFCReaderMode readerMode, {
 
+    /// for ios only
     /// enableTagReader enable reading tag identifier.
     bool enableTagReader = false,
 
+    /// for ios only
     /// onlyEnableTagReader will just read the tag identifier rather than ndef records.
     bool onlyEnableTagReader = false,
   }) {
@@ -104,9 +103,11 @@ class NFC {
       /// alertMessage sets the message on the iOS NFC modal.
       String alertMessage = "",
 
+      /// for ios only
       /// enableTagReader enable reading tag identifier.
       bool enableTagReader = false,
 
+      /// for ios only
       /// onlyEnableTagReader will just read the tag identifier rather than ndef records.
       bool onlyEnableTagReader = false,
 
@@ -214,8 +215,7 @@ class NFC {
     int writes = 0;
     StreamSubscription<NFCMessage> stream = _tagStream.listen((msg) async {
       NDEFMessage message = msg;
-      print("message.tag: ${message.tag}");
-      if (message.type == "tag") return;
+      if (message.other == "readTag") return;
       if (message.tag.writable) {
         try {
           await message.tag.write(newMessage);
@@ -320,7 +320,7 @@ class NDEFMessage implements NFCMessage {
   final String id;
   String type;
   final List<NDEFRecord> records;
-  dynamic other;
+  dynamic other; // for other payload
 
   NDEFMessage.withRecords(this.records, {this.id});
 

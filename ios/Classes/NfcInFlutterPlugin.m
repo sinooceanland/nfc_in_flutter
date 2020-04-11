@@ -641,10 +641,8 @@
     //NSLog(@"result---%@",numStr);
     self->tagIdentifier = hexStr;
     NSDictionary* result = @{
-        @"id": @"",
-        @"message_type": @"tag",
-        @"type": @"tag",
-        @"tagId": self->tagIdentifier ?: @"",
+        @"id": self->tagIdentifier ?: @"",
+        @"message_type": @"readTag",
     };
     if (self->events != nil) {
         self->events(result);
