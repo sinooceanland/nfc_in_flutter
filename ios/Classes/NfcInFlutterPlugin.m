@@ -536,8 +536,12 @@
 - (void)startReading:(BOOL)once alertMessage:(NSString* _Nonnull)alertMessage options:(NSDictionary *)options {
     self->invalidateAfterFirstRead = once;
     self->alertMessage = alertMessage;
-    _enableTagReader = [options[@"enable_tag_reader"] boolValue];
-    _onlyEnableTagReader = [options[@"only_enable_tag_reader"] boolValue];
+    if (options[@"enable_tag_reader"] != [NSNull null]) {
+        _enableTagReader = [options[@"enable_tag_reader"] boolValue];
+    }
+    if (options[@"only_enable_tag_reader"] != [NSNull null]) {
+        _onlyEnableTagReader = [options[@"only_enable_tag_reader"] boolValue];
+    }
     if (_enableTagReader || _onlyEnableTagReader) {
         [self startReadingTag];
     } else {
