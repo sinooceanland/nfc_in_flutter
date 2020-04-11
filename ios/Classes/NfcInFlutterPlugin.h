@@ -2,7 +2,7 @@
 #import <CoreNFC/CoreNFC.h>
 
 @protocol NFCWrapper <FlutterStreamHandler>
-- (void)startReading:(BOOL)once alertMessage:(NSString* _Nonnull)alertMessage;
+- (void)startReading:(BOOL)once alertMessage:(NSString* _Nonnull)alertMessage options:(NSDictionary *)options;
 - (BOOL)isEnabled;
 - (void)writeToTag:(NSDictionary* _Nonnull)data completionHandler:(void (^_Nonnull) (FlutterError * _Nullable error))completionHandler;
 @end

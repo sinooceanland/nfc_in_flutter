@@ -46,7 +46,7 @@
         result([NSNumber numberWithBool:[wrapper isEnabled]]);
     } else if ([@"startNDEFReading" isEqualToString:call.method]) {
         NSDictionary* args = call.arguments;
-        [wrapper startReading:[args[@"scan_once"] boolValue] alertMessage:args[@"alert_message"]];
+        [wrapper startReading:[args[@"scan_once"] boolValue] alertMessage:args[@"alert_message"] options:args];
         result(nil);
     } else if ([@"writeNDEF" isEqualToString:call.method]) {
         NSDictionary* args = call.arguments;
@@ -437,7 +437,7 @@
     return self;
 }
     
-- (void)startReading:(BOOL)once alertMessage:(NSString* _Nonnull)alertMessage {
+- (void)startReading:(BOOL)once alertMessage:(NSString* _Nonnull)alertMessage options:(NSDictionary *)options {
     self->invalidateAfterFirstRead = once;
     self->alertMessage = alertMessage;
     if (session == nil) {
@@ -523,6 +523,8 @@
 @interface NFCWritableWrapperImpl ()
 {
     BOOL _tagReadFinish;
+    BOOL _enableTagReader;
+    BOOL _onlyEnableTagReader;
 }
 
 @end
@@ -531,12 +533,22 @@
 
 @synthesize lastTag;
 
-- (void)startReading:(BOOL)once alertMessage:(NSString* _Nonnull)alertMessage {
+- (void)startReading:(BOOL)once alertMessage:(NSString* _Nonnull)alertMessage options:(NSDictionary *)options {
     self->invalidateAfterFirstRead = once;
     self->alertMessage = alertMessage;
+    _enableTagReader = [options[@"enable_tag_reader"] boolValue];
+    _onlyEnableTagReader = [options[@"only_enable_tag_reader"] boolValue];
+    if (_enableTagReader || _onlyEnableTagReader) {
+        [self startReadingTag];
+    } else {
+        [self startReadingNDEF];
+    }
+}
+
+- (void)startReadingTag {
     if (self.tagSession == nil) {
         self.tagSession = [[NFCTagReaderSession alloc] initWithPollingOption:(NFCPollingISO14443 | NFCPollingISO15693 | NFCPollingISO15693) delegate:self queue:dispatchQueue];
-        self.tagSession.alertMessage = alertMessage;
+        self.tagSession.alertMessage = self->alertMessage;
     }
     [self.tagSession beginSession];
 }
@@ -622,8 +634,8 @@
     NSData *data = mifareTag.identifier;
     NSString *hexStr = [self convertDataBytesToHex:data];
     NSString *numStr = [self getNumberWithHex:hexStr];
-    NSLog(@"result---%@",numStr);
-    self->tagIdentifier = numStr;
+    //NSLog(@"result---%@",numStr);
+    self->tagIdentifier = hexStr;
     NSDictionary* result = @{
         @"id": @"",
         @"message_type": @"tag",
@@ -637,9 +649,11 @@
     // stop reading tag，begin reading NDEF
     _tagReadFinish = YES;
     [self.tagSession invalidateSession];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        [self startReadingNDEF];
-    });
+    if (!_onlyEnableTagReader) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self startReadingNDEF];
+        });
+    }
 }
 
 - (NSString *)convertDataBytesToHex:(NSData *)dataBytes {
@@ -683,8 +697,8 @@
     NSString *byte3 = [hexStr substringWithRange:NSMakeRange(4, 2)]; //低位（第3个字节）
     NSString *byte2 = [hexStr substringWithRange:NSMakeRange(2, 2)]; //高位（第2个字节）
     NSString *byte1 = [hexStr substringWithRange:NSMakeRange(0, 2)]; //低位（第1个字节）
-    NSString *tempStr1 = [NSString stringWithFormat:@"%3lu",strtoul([byte3 UTF8String],0,16)];
-    NSString *tempStr2 = [NSString stringWithFormat:@"%5lu",strtoul([[byte2 stringByAppendingString:byte1] UTF8String],0,16)];
+    NSString *tempStr1 = [NSString stringWithFormat:@"%3lu",strtoul([byte3 UTF8String],0,16)]; // 3位数字，不足前置补零
+    NSString *tempStr2 = [NSString stringWithFormat:@"%5lu",strtoul([[byte2 stringByAppendingString:byte1] UTF8String],0,16)]; // 5位数字，不足前置补零
     NSString *tempStr = [tempStr1 stringByAppendingString:tempStr2];
     
     return tempStr;
@@ -769,7 +783,7 @@
     // https://knowyourmeme.com/photos/1483348-bugs-bunnys-no
     return NO;
 }
-- (void)startReading:(BOOL)once alertMessage:(NSString* _Nonnull)alertMessage {
+- (void)startReading:(BOOL)once alertMessage:(NSString* _Nonnull)alertMessage options:(NSDictionary *)options {
     return;
 }
 

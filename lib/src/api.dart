@@ -68,12 +68,23 @@ class NFC {
   }
 
   static void _startReadingNDEF(
-      bool once, String alertMessage, NFCReaderMode readerMode) {
+    bool once,
+    String alertMessage,
+    NFCReaderMode readerMode, {
+
+    /// enableTagReader enable reading tag identifier.
+    bool enableTagReader = false,
+
+    /// onlyEnableTagReader will just read the tag identifier rather than ndef records.
+    bool onlyEnableTagReader = false,
+  }) {
     // Start reading
     Map arguments = {
       "scan_once": once,
       "alert_message": alertMessage,
       "reader_mode": readerMode.name,
+      "enable_tag_reader": enableTagReader,
+      "only_enable_tag_reader": onlyEnableTagReader,
     }..addAll(readerMode._options);
     _channel.invokeMethod("startNDEFReading", arguments);
   }
@@ -92,6 +103,12 @@ class NFC {
 
       /// alertMessage sets the message on the iOS NFC modal.
       String alertMessage = "",
+
+      /// enableTagReader enable reading tag identifier.
+      bool enableTagReader = false,
+
+      /// onlyEnableTagReader will just read the tag identifier rather than ndef records.
+      bool onlyEnableTagReader = false,
 
       /// readerMode specifies which mode the reader should use. By default it
       /// will use the normal mode, which scans for tags normally without
@@ -157,7 +174,9 @@ class NFC {
     };
 
     try {
-      _startReadingNDEF(once, alertMessage, const NFCNormalReaderMode());
+      _startReadingNDEF(once, alertMessage, const NFCNormalReaderMode(),
+          onlyEnableTagReader: onlyEnableTagReader,
+          enableTagReader: enableTagReader);
     } on PlatformException catch (err) {
       if (err.code == "NFCMultipleReaderModes") {
         throw NFCMultipleReaderModesException();
