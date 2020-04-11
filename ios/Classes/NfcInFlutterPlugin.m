@@ -620,12 +620,14 @@
     self.cuurentTag = [tags firstObject];
     id<NFCMiFareTag> mifareTag = [self.cuurentTag asNFCMiFareTag];
     NSData *data = mifareTag.identifier;
-    NSString *string = [self convertDataBytesToHex:data];
-    NSLog(@"result---%@",string);
-    self->tagIdentifier = string;
+    NSString *hexStr = [self convertDataBytesToHex:data];
+    NSString *numStr = [self getNumberWithHex:hexStr];
+    NSLog(@"result---%@",numStr);
+    self->tagIdentifier = numStr;
     NSDictionary* result = @{
         @"id": @"",
         @"message_type": @"tag",
+        @"type": @"tag",
         @"tagId": self->tagIdentifier ?: @"",
     };
     if (self->events != nil) {
@@ -657,6 +659,35 @@
         }
     }];
     return hexStr;
+}
+
+
+/// 从 16 进制字符串中拼出一个8位数“卡号”
+/// @param hexStr 16 进制字符串
+/// 16 进制字符串需要至少包含 3 个字节
+/**
+ * 04 c8 cd d2 d2 64 80
+ * 卡号这么取：取前三个字节进行处理，高低位按照 [低位][高位] 的顺序处理
+ * cd转10进制，不足三位补零，得205
+ * c804拼起来转10进制，不足五位补零，得51204
+ * 然后两者拼接起来，最终卡号20551204
+ */
+- (NSString *)getNumberWithHex:(NSString *)hexStr {
+    if ([hexStr.lowercaseString hasPrefix:@"0x"]) {
+        hexStr = [hexStr substringFromIndex:2];
+    }
+    if ([hexStr length] < 6) {
+        return hexStr;
+    }
+    
+    NSString *byte3 = [hexStr substringWithRange:NSMakeRange(4, 2)]; //低位（第3个字节）
+    NSString *byte2 = [hexStr substringWithRange:NSMakeRange(2, 2)]; //高位（第2个字节）
+    NSString *byte1 = [hexStr substringWithRange:NSMakeRange(0, 2)]; //低位（第1个字节）
+    NSString *tempStr1 = [NSString stringWithFormat:@"%3lu",strtoul([byte3 UTF8String],0,16)];
+    NSString *tempStr2 = [NSString stringWithFormat:@"%5lu",strtoul([[byte2 stringByAppendingString:byte1] UTF8String],0,16)];
+    NSString *tempStr = [tempStr1 stringByAppendingString:tempStr2];
+    
+    return tempStr;
 }
 
 - (void)readerSession:(NFCNDEFReaderSession *)session
