@@ -444,7 +444,16 @@
         session = [[NFCNDEFReaderSession alloc]initWithDelegate:self queue:dispatchQueue invalidateAfterFirstRead: once];
         session.alertMessage = alertMessage;
     }
-    [self->session beginSession];
+    if (self->session) {
+        [self->session beginSession];
+    } else {
+        if (self->events != nil) {
+            self->events([FlutterError
+                          errorWithCode:@"NDEFUnsupportedFeatureError"
+                          message:@""
+                          details:nil]);
+        }
+    }
 }
     
 - (BOOL)isEnabled {
@@ -554,7 +563,16 @@
         self.tagSession = [[NFCTagReaderSession alloc] initWithPollingOption:(NFCPollingISO14443 | NFCPollingISO15693 | NFCPollingISO15693) delegate:self queue:dispatchQueue];
         self.tagSession.alertMessage = self->alertMessage;
     }
-    [self.tagSession beginSession];
+    if (self.tagSession) {
+        [self.tagSession beginSession];
+    } else {
+        if (self->events != nil) {
+            self->events([FlutterError
+                          errorWithCode:@"NDEFUnsupportedFeatureError"
+                          message:@""
+                          details:nil]);
+        }
+    }
 }
 
 - (void)startReadingNDEF {
@@ -562,7 +580,16 @@
         session = [[NFCNDEFReaderSession alloc]initWithDelegate:self queue:dispatchQueue invalidateAfterFirstRead: self->invalidateAfterFirstRead];
         session.alertMessage = self->alertMessage;
     }
-    [self->session beginSession];
+    if (self->session) {
+        [self->session beginSession];
+    } else {
+        if (self->events != nil) {
+            self->events([FlutterError
+                          errorWithCode:@"NDEFUnsupportedFeatureError"
+                          message:@""
+                          details:nil]);
+        }
+    }
 }
 
 - (void)tagReaderSessionDidBecomeActive:(NFCTagReaderSession *)session {}
